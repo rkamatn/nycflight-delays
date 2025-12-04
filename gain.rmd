@@ -1,0 +1,220 @@
+---
+title: "Project 2"
+author: "Rashmi Kamath"
+date: "2025-11-21"
+output: html_document
+---
+
+```{r}
+library(nycflights13)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+
+```{r}
+
+United_Airlines <- flights %>% 
+  filter(!is.na(dep_delay),!is.na(arr_delay),!is.na(air_time))%>% 
+  filter(carrier == "UA")
+glimpse(United_Airlines)
+
+```
+
+```{r}
+United_Airlines <- United_Airlines %>%
+  mutate(net_gain = dep_delay - arr_delay,
+    air_time_hours = air_time / 60,
+    gain_per_hour = net_gain / air_time_hours,
+    "late"= ifelse(dep_delay>0,TRUE,FALSE),"very_late"=ifelse(dep_delay>30,TRUE,FALSE)
+    )
+```
+
+```{r}
+glimpse(United_Airlines)
+```
+
+
+3.
+
+
+```{r}
+#Create a bar plot
+ggplot(data = United_Airlines , aes(x= gain_per_hour ))+
+  geom_histogram(color = 'black') +
+  labs(x = "Average gain per hour", title = "Distribution of gain per hour")
+```
+
+```{r}
+summary(United_Airlines$gain_per_hour)
+```
+
+
+```{r}
+United_Airlines %>%
+  group_by(late) %>%
+  summarise(
+    count       = n(),
+    mean_gain_per_hour   = round(mean(gain_per_hour, na.rm = TRUE), 2),
+    median_gain_per_hour = round(median(gain_per_hour, na.rm = TRUE), 2),
+    sd_gain_per_hour     = round(sd(gain_per_hour, na.rm = TRUE), 2),
+    min_gain_per_hour    = round(min(gain_per_hour, na.rm = TRUE), 2),
+    max_gain_per_hour     = round(max(gain_per_hour, na.rm = TRUE), 2)
+  )
+
+
+
+```
+```{r}
+United_Airlines %>%
+  group_by(very_late) %>%
+  summarise(
+    count       = n(),
+    mean_gain_per_hour   = round(mean(gain_per_hour, na.rm = TRUE), 2),
+    median_gain_per_hour  = round(median(gain_per_hour, na.rm = TRUE), 2),
+    sd_gain_per_hour     = round(sd(gain_per_hour, na.rm = TRUE), 2),
+    min_gain_per_hour    = round(min(gain_per_hour, na.rm = TRUE), 2),
+    max_gain_per_hour     = round(max(gain_per_hour, na.rm = TRUE), 2)
+  )
+
+```
+
+```{r}
+ggplot(United_Airlines,aes(gain_per_hour,fill = late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'Distribution of Gain / Late')
+```
+
+
+```{r}
+ggplot(United_Airlines,aes(gain_per_hour,,fill = very_late))+
+  geom_histogram(bins = 30)+
+  labs(title = 'Distribution of Gain /Very Late')
+```
+
+
+```{r}
+
+t.test(gain_per_hour ~ late, data=United_Airlines, alternative = "two.sided")
+
+```
+
+
+
+```{r}
+
+t.test(gain_per_hour ~ very_late, data=United_Airlines, alternative = "two.sided")
+
+```
+
+```{r}
+
+United_Airlines <- United_Airlines %>%
+  mutate(
+    late_status = factor(late,
+                         levels = c(FALSE, TRUE),
+                         labels = c("On Time / Early", "Late"))
+  )
+
+options(repr.plot.width = 1, repr.plot.height = 1)
+ggplot(United_Airlines, aes(x = late_status, y = gain_per_hour, fill = late_status)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge") +
+  labs(title = "Average Gain per Hour by late vs Early/on_time",
+       x = "Departure Status",
+       y = "Average Gain per Hour"
+       )+
+  theme(legend.position = "none")
+
+
+```
+
+```{r fig.width=5, fig.height=5}
+ggplot(United_Airlines, aes(x = late_status, y = gain_per_hour, fill = late_status)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge", width = 0.6) +
+  labs(
+    title = "Average Gain per Hour by Departure Status (late)",
+    x = "Departure Status",
+    y = "Average Gain per Hour"
+  )+
+  theme(legend.position = "none")
+```
+
+```{r fig.width=5, fig.height=5}
+
+United_Airlines <- United_Airlines %>%
+  mutate(
+    very_late_status = factor(very_late,
+                         levels = c(FALSE, TRUE),
+                         labels = c("On Time / Early", "Very Late"))
+  )
+ggplot(United_Airlines, aes(x = very_late_status, y = gain_per_hour, fill = very_late_status)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge",width = 0.6) +
+  labs(title = "Average Gain per Hour by Departure Status(very late)",
+       x = "Departure Status",
+       y = "Average Gain per Hour"
+       )+
+theme(legend.position = "none")
+```
+
+
+
+4.
+
+```{r fig.width=5, fig.height=5}
+United_Airlines <- United_Airlines %>%
+  mutate(flight_length = ifelse(air_time <= median(air_time), 'Short', 'Long'))
+
+t.test(gain_per_hour ~ flight_length, data= United_Airlines, alternative="two.sided")
+
+ggplot(United_Airlines, aes(x = flight_length, y = gain_per_hour, fill = flight_length)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge",width=0.8) +
+  labs(title = "Average Gain per hour for Short and Long Flights",
+       x = "Flight Length",
+       y = "Average Gain per hour",
+       fill = "Flight Length")+
+  theme(legend.position = "none")
+```
+
+```{r}
+United_Airlines %>% 
+  count(flight_length)
+```
+
+
+
+```{r}
+
+United_Airlines <- United_Airlines %>%
+  mutate(
+    flight_length_dist = case_when(
+      distance < 1000 ~ "Short",
+      distance >= 1000 ~ "Long"
+    )
+  )
+```
+
+```{r}
+United_Airlines %>% 
+  count(flight_length_dist)
+```
+
+United_Airlines %>% 
+  count(flight_length)
+```{r}
+
+t.test(gain_per_hour ~ flight_length_dist, data = United_Airlines)
+
+```
+
+```{r}
+ggplot(United_Airlines, aes(x = flight_length_dist, y = gain_per_hour, fill = flight_length_dist)) +
+  geom_bar(stat = "summary", fun = "mean") +
+  labs(title = "Average Gain per Hour by Distance-Based Flight Length",
+       x = "Flight Length (Distance-Based)",
+       y = "Average Gain per Hour") +
+  theme(legend.position = "none")
+
+```
+
+
