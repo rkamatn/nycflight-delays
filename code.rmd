@@ -1,0 +1,1030 @@
+---
+title: "nycflights"
+author: Rashmi Kamath
+output: html_document
+date: "2025-10-28"
+---
+
+```{r}
+library(nycflights13)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+glimpse(flights)
+```
+```{r}
+glimpse(weather)
+```
+
+Filter out the data based on the United Airlines carrier<BR>
+
+```{r}
+flights_UA <- flights %>%
+  filter(carrier == "UA")
+glimpse(flights_UA)
+```
+
+We need to join the dataset UA_flight  with the Weather dataset.<BR>
+We create 2 new variables late(departure>0) and very_late ( departure >30)
+
+```{r}
+flights_weather_joined <- flights %>%
+  filter(carrier == "UA")%>%
+  inner_join(weather, by = c("year", "month", "day", "hour", "origin"))%>%
+  mutate("late"= ifelse(dep_delay>0,TRUE,FALSE),"very_late"=ifelse(dep_delay>30,TRUE,FALSE))
+glimpse(flights_weather_joined)
+```
+
+
+```{r}
+ggplot(data = flights_weather_joined, aes(x= dep_delay ))+
+  geom_bar(color='blue') +
+  labs(x = "Departure Delay in minutes", title = "Distribution of Departure Delay")
+```
+```{r}
+summary(flights_weather_joined$dep_delay)
+```
+
+We see that Departure delay has 675 NA's. The minimum departure delay shows -20. This means that flight has been departed 20 minutes early and maximum shows 483 minutes indicating that there was a huge delay of 8.05 hrs.
+
+Let us see how many flights were "late"
+
+```{r}
+# Create contigency table
+
+flights_weather_joined <- flights_weather_joined %>%
+  filter(!is.na(dep_delay))
+
+flight_delay_late<-table(flights_weather_joined$late)
+ggplot(data = flights_weather_joined , aes(x= late))+
+  geom_bar(color='blue') +
+  ggtitle('Departure Delay')
+
+```
+Let us see how many flights were "very_late"
+
+```{r}
+# Create contigency table
+
+flights_weather_joined <- flights_weather_joined %>%
+  filter(!is.na(dep_delay))
+
+flight_delay_late <-table(flights_weather_joined$late)
+# Create bar plot
+ggplot(data = flights_weather_joined , aes(x= very_late))+
+  geom_bar() +
+  ggtitle('Departure Delay')
+```
+```{r}
+summary_delay<-flights_weather_joined %>%
+  summarize(late=mean(late,na.rm = TRUE)*100,very_late=mean(very_late,na.rm = TRUE)*100)
+summary_delay
+```
+The summary table shows 46.96% flights were late and 13.12% flights were very late.
+
+a) Time of the Day
+
+```{r}
+ggplot(flights_weather_joined, aes(x= hour))+
+  geom_bar()+
+  labs(x = "Time of the Day", title = "Distribution of Departure Delay",y = "Number of Flights")
+```
+The busiest hour for UA flight is at 6AM followed by 5 PM.We can also see that there is no flight operated between 12 AM to 5AM
+
+```{r}
+summary_hour <- flights_weather_joined %>%
+ group_by(hour) %>% 
+  summarise(
+    mean_hour = mean(dep_delay,na.rm = TRUE),
+    sd_hour = sd(dep_delay,na.rm = TRUE),
+    median_hour = median(dep_delay,na.rm = TRUE),
+    count_hour = n()
+  )
+summary_hour
+```
+
+
+```{r}
+ggplot(summary_hour, aes(x = hour, y = mean_hour)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  geom_point(color = "darkred", size = 2) +
+  labs(
+    title = "Average Departure Delay by Hour",
+    x = "Hour of Day",
+    y = "Mean Departure Delay (minutes)"
+  ) +
+  theme_minimal()
+```
+```{r}
+ggplot(summary_hour, aes(x = factor(hour), y = mean_hour)) +
+  geom_col(fill = "skyblue") +
+  labs(
+    title = "Average Departure Delay by Hour",
+    x = "Hour of Day",
+    y = "Mean Departure Delay (minutes)"
+  ) +
+  theme_minimal()
+```
+
+
+From the above 2 graphs we can see that the highest dealy is at 10PM. The trend is increasing from morning to Night. with less delays in the morning and delays piling up  gradually.
+
+
+```{r}
+summary_late <- flights_weather_joined  %>%
+ filter(!is.na(hour), !is.na(late)) %>%
+ group_by(hour,late) %>% 
+  summarise(
+    count_hour = n()
+  )
+summary_late
+ggplot(summary_late,aes(hour,count_hour,fill = late))+
+  geom_bar(stat = 'identity', position = 'dodge')+
+  labs(title = 'Count of flight which were late or on time')
+```
+Interpretation:
+Morning (5AM–12PM):Most morning flights depart on time.Morning departures have the highest reliability.
+
+Afternoon (12PM–5PM):Slight increase in delays.
+
+Evening (5 PM–9 PM):We often see the highest count or percentage of late flights.
+
+Night (9PM–5AM): Fewer scheduled flights overall (low counts).
+
+Flights departing in the morning (5 AM–12 PM) are the most punctual, while evening flights (5 PM–9 PM) experience the highest delay frequency. Afternoon hours show moderate delay levels, and night flights have fewer operations overall. This pattern suggests that delays accumulate throughout the day, peaking in the evening may be due to weather factors.
+
+
+```{r}
+summary_very_late <- flights_weather_joined  %>%
+ filter(!is.na(hour), !is.na(very_late)) %>%
+ group_by(hour,very_late) %>% 
+  summarise(
+    count_hour = n()
+  )
+summary_very_late
+ggplot(summary_very_late,aes(hour,count_hour,fill = very_late))+
+  geom_bar(stat = 'identity', position = 'dodge')+
+  labs(title = 'Count of flight which were very late or on time')
+```
+Interpretation:
+The number of very late flights remains low in the early morning hours but increases steadily throughout the day, peaking during the late afternoon and early evening. This pattern suggests that cumulative delays from earlier flights contribute to more extreme lateness later in the day. Early morning flights are therefore the most reliable, while evening departures face the highest risk of significant delays.
+
+```{r}
+summary_origin <- flights_weather_joined  %>%
+ filter(!is.na(hour)) %>%
+ group_by(hour,origin) %>% 
+  summarise(
+    mean_hour = mean(dep_delay,na.rm = TRUE),
+    sd_hour = sd(dep_delay,na.rm = TRUE),
+    median_hour = median(dep_delay,na.rm = TRUE),
+    count_hour = n()
+  )
+summary_origin
+ggplot(summary_origin,aes(hour,count_hour,fill = origin))+
+  geom_bar(stat = 'identity', position = 'dodge')+
+  labs(title = 'Number of Flights by Hour and Origin Airport')
+```
+Interpretation:
+
+Among the three New York City airports, EWR (Newark) accounts for the largest share of flights across all hours.Newark handles the greatest flight volume among the three NYC airports, so it naturally contributes the most to both on-time and late departures. Morning hours (5–9 AM) see the highest total departures, with relatively on-time performance. As the day progresses, EWR continues to operate more flights than JFK and LGA, though congestion and cumulative delays tend to increase during afternoon and evening hours. Overall, flight activity is heavily concentrated in the morning and early evening periods, tapering off sharply at night.
+
+```{r}
+
+# Convert scheduled hour into time blocks
+flights_weather_joined <- flights_weather_joined %>%
+  mutate(
+    time_of_day = case_when(
+      hour >= 5 & hour < 12 ~ "Morning (5AM–12PM)",
+      hour >= 12 & hour < 17 ~ "Afternoon (12PM–5PM)",
+      hour >= 17 & hour < 21 ~ "Evening (5PM–9PM)",
+      TRUE ~ "Night (9PM–5AM)"
+    )
+  )
+
+flights_weather_joined
+```
+
+
+```{r}
+summary_time_of_day <- flights_weather_joined %>%
+  group_by(time_of_day) %>%
+  summarise(
+    flights = n(),
+    mean_delay = mean(dep_delay, na.rm = TRUE),
+    median_delay = median(dep_delay, na.rm = TRUE),
+    sd_delay = sd(dep_delay, na.rm = TRUE),
+    max_delay = max(dep_delay, na.rm = TRUE),
+    pct_late = mean(dep_delay > 0, na.rm = TRUE) * 100,
+    pct_very_late = mean(dep_delay > 30, na.rm = TRUE) * 100
+  ) %>%
+  mutate(across(where(is.numeric), round, 2)) %>% 
+  arrange(factor(time_of_day, 
+                 levels = c("Morning (5AM–12PM)", 
+                            "Afternoon (12PM–5PM)", 
+                            "Evening (5PM–9PM)", 
+                            "Night (9PM–5AM)")))
+summary_time_of_day
+```
+
+
+```{r}
+
+
+delay_by_time_of_day$time_of_day <- factor(
+  delay_by_time_of_day$time_of_day,
+  levels = c(
+    "Morning (5AM–12PM)",
+    "Afternoon (12PM–5PM)",
+    "Evening (5PM–9PM)",
+    "Night (9PM–5AM)"
+  )
+)
+
+# Plot
+ggplot(delay_by_time_of_day, aes(x = time_of_day, y = avg_delay)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(avg_delay, 1)), vjust = -0.4, size = 3.8) +
+
+  labs(
+    title = "Average Departure Delay by Time of Day (UA Flights - 2013)",
+    x = "Time of Day",
+    y = "Average Departure Delay (minutes)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.x = element_text(angle = 20, hjust = 1),
+    plot.title = element_text(face = "bold", size = 14)
+  ) +
+  ylim(0, max(delay_by_time_of_day$avg_delay) + 5)
+
+```
+Graph shows the average departure delay for United Airlines flights in 2013, categorized by time of day.
+The data reveal a clear upward trend: morning flights (5 AM–12 PM) have the fewest delays (4.6 minutes on average), while evening flights (5 PM–9 PM) experience the longest average delays (21.9 minutes).
+This pattern suggests that delays accumulate throughout the day due to weather conditions, increased air-traffic congestion and tighter aircraft turnaround times during peak evening hours.
+
+Night-time flights show a very slight improvement may be due to no flights operating after 12 AM.
+
+```{r}
+
+flights_weather_joined <- flights_weather_joined %>%
+  mutate(
+    time_of_day = factor(
+      time_of_day,
+      levels = c(
+        "Morning (5AM–12PM)",
+        "Afternoon (12PM–5PM)",
+        "Evening (5PM–9PM)",
+        "Night (9PM–5AM)"
+      )
+    )
+  )
+ggplot(flights_weather_joined, aes(x = time_of_day, y = dep_delay)) +
+  geom_boxplot(fill = "skyblue", outlier.alpha = 0.4) +
+  coord_cartesian(ylim = c(0, 100)) +   # zooms without dropping data
+  labs(
+    title = "Distribution of Departure Delays by Time of Day (UA Flights)",
+    x = "Time of Day", y = "Departure Delay (minutes)"
+  ) +
+  ylim(-50,100)+
+  theme_minimal()
+
+```
+
+Figure X shows the distribution of United Airlines departure delays across different times of day.
+The median delay increases steadily from morning to evening, with morning flights showing the smallest spread and lowest median delay.
+Afternoon and evening flights exhibit both higher medians and wider interquartile ranges, indicating greater variability and more extreme delay events.
+Night-time flights (9 PM–5 AM) have moderately high variability, likely reflecting schedule recovery operations after peak-hour disruptions.
+Overall, this pattern confirms that delays accumulate throughout the day, peaking in the evening when airport congestion and reactionary delays are most common
+
+
+Relationship Between Departure Delays and Time of Year
+
+```{r}
+summary_time_of_year <- flights_weather_joined %>%
+  group_by(month) %>%
+  summarise(
+    flights = n(),
+    mean_delay = mean(dep_delay, na.rm = TRUE),
+    median_delay = median(dep_delay, na.rm = TRUE),
+    sd_delay = sd(dep_delay, na.rm = TRUE),
+    max_delay = max(dep_delay, na.rm = TRUE),
+    pct_late = mean(dep_delay > 0, na.rm = TRUE) * 100,
+    pct_very_late = mean(dep_delay > 30, na.rm = TRUE) * 100
+  ) %>%
+  mutate(across(where(is.numeric), round, 2))%>%
+  mutate(month_name = factor(month.abb[month], levels = month.abb)) %>%
+  select(month_name, everything(), -month)
+summary_time_of_year
+
+```
+
+We can see from the above table that the highest mean delay is in the month of June and July followed by December.
+
+
+```{r}
+ggplot(delay_by_month, aes(x = month_name, y = avg_delay, group = 1)) +
+  geom_line(color ="steelblue", linewidth = 1.3) +
+  geom_point(size = 3, color = "darkred") +
+  labs(
+    title = "Seasonal Trend in Departure Delays (UA Flights - 2013)",
+    x = "Month",
+    y = "Average Departure Delay (minutes)"
+  ) +
+  theme_minimal()
+```
+```{r}
+flights_weather_joined <- flights_weather_joined %>%
+  mutate(month_name = factor(month.abb[month], levels = month.abb))
+
+ggplot(flights_weather_joined, aes(x = month_name, y = dep_delay)) +
+  geom_boxplot(fill = "lightblue") +
+  coord_cartesian(ylim = c(0, 100)) +
+  labs(
+    title = "Distribution of Departure Delays by Month (UA Flights)",
+    x = "Month",
+    y = "Departure Delay (minutes)"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+summary_long <- summary_time_of_year %>%
+  pivot_longer(cols = c(pct_late, pct_very_late),
+               names_to = "delay_type",
+               values_to = "percent") %>%
+  mutate(delay_type = recode(delay_type,
+                             "pct_late" = "Late Flights (>0 min)",
+                             "pct_very_late" = "Very Late Flights (>30 min)"))
+
+ggplot(summary_long, aes(x = month_name, y = percent, fill = delay_type)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Percentage of Late and Very Late Flights by Month (UA - 2013)",
+    x = "Month", y = "Percentage of Flights (%)",
+    fill = "Delay Category"
+  ) +
+  scale_fill_brewer(palette = "Blues") +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+ggplot(summary_long, aes(x = month_name, y = percent, color = delay_type, group = delay_type)) +
+  geom_line(linewidth = 1.3) +
+  geom_point(size = 2.5) +
+  labs(
+    title = "Monthly Trend of Late and Very Late Flights (UA - 2013)",
+    x = "Month", y = "Percentage of Flights (%)",
+    color = "Delay Category"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+delay_by_month_origin <- flights_weather_joined %>%
+  group_by(month, origin) %>%
+  summarise(avg_delay = mean(dep_delay, na.rm = TRUE)) %>%
+  mutate(month_name = factor(month.abb[month], levels = month.abb))
+
+ggplot(delay_by_month_origin, aes(x = month_name, y = avg_delay, fill = origin)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Average Departure Delay by Month and Origin (UA Flights - 2013)",
+    x = "Month",
+    y = "Average Departure Delay (minutes)",
+    fill = "Origin Airport"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Permutation test for Time of day:
+
+We will start by doing test between morning and night
+
+```{r}
+
+#  Filter the dataset to include only Morning and Night flights
+flights_test <- flights_weather_joined %>%
+  filter(time_of_day %in% c("Morning (5AM–12PM)", "Night (9PM–5AM)")) %>%
+  drop_na(dep_delay)
+
+#calculate and store the observed difference in the sample
+observed <- mean(flights_test$dep_delay[flights_test$time_of_day == "Morning (5AM–12PM)"]) -
+             mean(flights_test$dep_delay[flights_test$time_of_day == "Night (9PM–5AM)"])
+observed
+
+#N = number of simulations we will use
+N <- 10^3-1
+
+#sample.size = the number of observations in our sample
+sample.size = nrow(flights_test)
+
+#group.1.size = the number of observations in the first group
+sample.size <- nrow(flights_test)                           # Total number of observations
+group.1.size <-  nrow(flights_test[flights_test$time_of_day == "Morning (5AM–12PM)",])
+#group.1.size <- sum(flights_test$time_of_day == "Morning (5AM–12PM)") 
+
+#create a blank vector to store the simulation results
+result <- numeric(N)
+
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "EWR" group, indexes not sample as "LGA"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in
+  #mean dep_delay between the index and non-index groups
+  result[i] = mean(flights_test$dep_delay[index]) - mean(flights_test$dep_delay[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) +
+  geom_histogram() +
+  geom_vline(xintercept = observed, color = "red")
+
+#Calculate the p-value
+2* (sum(result <= observed) + 1) / (N + 1)
+```
+Since the p value is small indicating that the difference between the departure delay between morning and night are statistically significant.
+
+
+Permutation test for Time of day:
+
+We will start by doing test between morning and afternoon
+
+```{r}
+
+#  Filter the dataset to include only Morning and Night flights
+flights_test <- flights_weather_joined %>%
+  filter(time_of_day %in% c("Morning (5AM–12PM)", "Afternoon (12PM–5PM)")) %>%
+  drop_na(dep_delay)
+
+#calculate and store the observed difference in the sample
+observed <- mean(flights_test$dep_delay[flights_test$time_of_day == "Morning (5AM–12PM)"]) -
+             mean(flights_test$dep_delay[flights_test$time_of_day == "Afternoon (12PM–5PM)"])
+observed
+
+#N = number of simulations we will use
+N <- 10^3-1
+
+#sample.size = the number of observations in our sample
+sample.size = nrow(flights_test)
+
+#group.1.size = the number of observations in the first group
+sample.size <- nrow(flights_test)                           # Total number of observations
+group.1.size <-  nrow(flights_test[flights_test$time_of_day == "Morning (5AM–12PM)",])
+#group.1.size <- sum(flights_test$time_of_day == "Morning (5AM–12PM)") 
+
+#create a blank vector to store the simulation results
+result <- numeric(N)
+
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "EWR" group, indexes not sample as "LGA"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in
+  #mean dep_delay between the index and non-index groups
+  result[i] = mean(flights_test$dep_delay[index]) - mean(flights_test$dep_delay[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) +
+  geom_histogram() +
+  geom_vline(xintercept = observed, color = "red")
+
+#Calculate the p-value
+2* (sum(result <= observed) + 1) / (N + 1)
+```
+We will start by doing test between morning and evening
+
+```{r}
+
+#  Filter the dataset to include only Morning and Night flights
+flights_test <- flights_weather_joined %>%
+  filter(time_of_day %in% c("Morning (5AM–12PM)", "Evening (5PM–9PM)")) %>%
+  drop_na(dep_delay)
+
+#calculate and store the observed difference in the sample
+observed <- mean(flights_test$dep_delay[flights_test$time_of_day == "Morning (5AM–12PM)"]) -
+             mean(flights_test$dep_delay[flights_test$time_of_day == "Evening (5PM–9PM)"])
+observed
+
+#N = number of simulations we will use
+N <- 10^3-1
+
+#sample.size = the number of observations in our sample
+sample.size = nrow(flights_test)
+
+#group.1.size = the number of observations in the first group
+sample.size <- nrow(flights_test)                           # Total number of observations
+group.1.size <-  nrow(flights_test[flights_test$time_of_day == "Morning (5AM–12PM)",])
+#group.1.size <- sum(flights_test$time_of_day == "Morning (5AM–12PM)") 
+
+#create a blank vector to store the simulation results
+result <- numeric(N)
+
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "EWR" group, indexes not sample as "LGA"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in
+  #mean dep_delay between the index and non-index groups
+  result[i] = mean(flights_test$dep_delay[index]) - mean(flights_test$dep_delay[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) +
+  geom_histogram() +
+  geom_vline(xintercept = observed, color = "red")
+
+#Calculate the p-value
+2* (sum(result <= observed) + 1) / (N + 1)
+```
+
+Now we will conduct the test for Night (9PM–5AM)", "Evening (5PM–9PM)
+
+```{r}
+
+# Filter the dataset to include evening and Night flights
+
+flights_test <- flights_weather_joined %>%
+  filter(time_of_day %in% c("Night (9PM–5AM)", "Evening (5PM–9PM)")) %>%
+  drop_na(dep_delay)
+
+#calculate and store the observed difference in the sample
+observed <- mean(flights_test$dep_delay[flights_test$time_of_day == "Night (9PM–5AM)"]) -
+             mean(flights_test$dep_delay[flights_test$time_of_day == "Evening (5PM–9PM)"])
+observed
+
+#N = number of simulations we will use
+N <- 10^3-1
+
+#sample.size = the number of observations in our sample
+sample.size = nrow(flights_test)
+
+#group.1.size = the number of observations in the first group
+sample.size <- nrow(flights_test)                           # Total number of observations
+group.1.size <-  nrow(flights_test[flights_test$time_of_day == "Night (9PM–5AM)",])
+
+
+#create a blank vector to store the simulation results
+result <- numeric(N)
+
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "Night (9PM–5AM)" group, indexes not sample as "Evening (5PM–9PM)"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in
+  #mean dep_delay between the index and non-index groups
+  result[i] = mean(flights_test$dep_delay[index]) - mean(flights_test$dep_delay[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) +
+  geom_histogram() +
+  geom_vline(xintercept = observed, color = "red")
+
+#Calculate the p-value
+2* (sum(result <= observed) + 1) / (N + 1)
+
+```
+The p-value is large indicating that the difference in mean time between Evening and Night times are not statistically significant and might be due to random chance.
+
+```{r}
+
+# Filter the dataset to include evening and Night flights
+
+flights_test <- flights_weather_joined %>%
+  filter(time_of_day %in% c("Afternoon (12PM–5PM)", "Evening (5PM–9PM)")) %>%
+  drop_na(dep_delay)
+
+#calculate and store the observed difference in the sample
+observed <- mean(flights_test$dep_delay[flights_test$time_of_day == "Afternoon (12PM–5PM)"]) -
+             mean(flights_test$dep_delay[flights_test$time_of_day == "Evening (5PM–9PM)"])
+observed
+
+#N = number of simulations we will use
+N <- 10^3-1
+
+#sample.size = the number of observations in our sample
+sample.size = nrow(flights_test)
+
+#group.1.size = the number of observations in the first group
+sample.size <- nrow(flights_test)                           # Total number of observations
+group.1.size <-  nrow(flights_test[flights_test$time_of_day == "Afternoon (12PM–5PM)",])
+
+
+#create a blank vector to store the simulation results
+result <- numeric(N)
+
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "Night (9PM–5AM)" group, indexes not sample as "Evening (5PM–9PM)"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in
+  #mean dep_delay between the index and non-index groups
+  result[i] = mean(flights_test$dep_delay[index]) - mean(flights_test$dep_delay[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) +
+  geom_histogram() +
+  geom_vline(xintercept = observed, color = "red")
+
+#Calculate the p-value
+2* (sum(result <= observed) + 1) / (N + 1)
+
+```
+```{r}
+
+# Filter the dataset to include evening and Night flights
+
+flights_test <- flights_weather_joined %>%
+  filter(time_of_day %in% c("Afternoon (12PM–5PM)", "Night (9PM–5AM)")) %>%
+  drop_na(dep_delay)
+
+#calculate and store the observed difference in the sample
+observed <- mean(flights_test$dep_delay[flights_test$time_of_day == "Afternoon (12PM–5PM)"]) -
+             mean(flights_test$dep_delay[flights_test$time_of_day == "Night (9PM–5AM)"])
+observed
+
+#N = number of simulations we will use
+N <- 10^3-1
+
+#sample.size = the number of observations in our sample
+sample.size = nrow(flights_test)
+
+#group.1.size = the number of observations in the first group
+sample.size <- nrow(flights_test)                           # Total number of observations
+group.1.size <-  nrow(flights_test[flights_test$time_of_day == "Afternoon (12PM–5PM)",])
+
+
+#create a blank vector to store the simulation results
+result <- numeric(N)
+
+#use a for loop to cycle through values of i ranging from 1 to N
+for(i in 1:N)
+{
+  #each iteration, randomly sample index values
+  #sample.size gives the total number of index values to sample from
+  #group.1.size gives the number of index values to sample
+  #sample without replacement
+  #indexes sampled will be treated as the "Night (9PM–5AM)" group, indexes not sample as "Evening (5PM–9PM)"
+  index = sample(sample.size, size=group.1.size, replace = FALSE)
+
+  #calculate and store the difference in
+  #mean dep_delay between the index and non-index groups
+  result[i] = mean(flights_test$dep_delay[index]) - mean(flights_test$dep_delay[-index])
+}
+
+#plot a histogram of the simulated differences
+#add a vertical line at the observed difference
+ggplot(data=tibble(result), mapping = aes(x=result)) +
+  geom_histogram() +
+  geom_vline(xintercept = observed, color = "red")
+
+#Calculate the p-value
+2* (sum(result <= observed) + 1) / (N + 1)
+
+```
+Permutation tests for Time of the year.
+
+We will conduct the permutation test for months June and July and see if the departure delays are due to random chance or they are statistiscally different.
+
+```{r}
+#  Filter the dataset for June and July only
+flights_test <- flights_weather_joined %>%
+  filter(month %in% c(6, 7)) %>%          # 6 = June, 7 = July
+  drop_na(dep_delay)
+
+#  Calculate and store the observed difference in the sample
+# (Mean delay for June minus mean delay for July)
+observed <- mean(flights_test$dep_delay[flights_test$month == 6]) -
+             mean(flights_test$dep_delay[flights_test$month == 7])
+
+observed  # print observed difference
+
+# Set simulation parameters
+N <- 10^3 - 1              # Number of permutations (999)
+sample.size <- nrow(flights_test)                          # Total number of observations
+group.1.size <- sum(flights_test$month == 6)               # June group size
+
+# Create a blank vector to store simulation results
+result <- numeric(N)
+
+#  Run the permutation test manually
+set.seed(123)  # for reproducibility
+
+for (i in 1:N) {
+  # Randomly assign flights to "June" group
+  index <- sample(sample.size, size = group.1.size, replace = FALSE)
+  
+  # Compute difference in mean dep_delay between two random groups
+  result[i] <- mean(flights_test$dep_delay[index]) - mean(flights_test$dep_delay[-index])
+}
+
+# 6️⃣ Visualize the permutation distribution
+ggplot(data = tibble(result), aes(x = result)) +
+  geom_histogram(bins = 40, fill = "skyblue", color = "white") +
+  geom_vline(xintercept = observed, color = "red", linewidth = 1.2) +
+  labs(
+    title = "Permutation Test: Mean Departure Delay — June vs July",
+    subtitle = "Red line shows the observed difference (June − July)",
+    x = "Difference in Mean Departure Delay (minutes)",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 13)
+
+# 7️⃣ Calculate the two-tailed p-value
+p_value <- 2 * min(
+  (sum(result >= observed) + 1) / (N + 1),
+  (sum(result <= observed) + 1) / (N + 1)
+)
+
+p_value  # print the final p-value
+
+```
+p-value is high indicating that that the difference in mean delays bewtween the months June and July are solely due to random chance.
+
+
+
+```{r}
+
+#  Filter the dataset for June and December only
+flights_test <- flights_weather_joined %>%
+  filter(month %in% c(6, 12)) %>%          # 6 = June, 7 = July
+  drop_na(dep_delay)
+
+#  Calculate and store the observed difference in the sample
+# (Mean delay for June minus mean delay for July)
+observed <- mean(flights_test$dep_delay[flights_test$month == 6]) -
+             mean(flights_test$dep_delay[flights_test$month == 12])
+
+observed  # print observed difference
+
+# Set simulation parameters
+N <- 10^3 - 1              # Number of permutations (999)
+sample.size <- nrow(flights_test)                          # Total number of observations
+group.1.size <- sum(flights_test$month == 6)               # June group size
+
+# Create a blank vector to store simulation results
+result <- numeric(N)
+
+# 5️⃣ Run the permutation test manually
+set.seed(123)  # for reproducibility
+
+for (i in 1:N) {
+  # Randomly assign flights to "June" group
+  index <- sample(sample.size, size = group.1.size, replace = FALSE)
+  
+  # Compute difference in mean dep_delay between two random groups
+  result[i] <- mean(flights_test$dep_delay[index]) - mean(flights_test$dep_delay[-index])
+}
+
+# Visualize the permutation distribution
+ggplot(data = tibble(result), aes(x = result)) +
+  geom_histogram(bins = 40, fill = "skyblue", color = "white") +
+  geom_vline(xintercept = observed, color = "red", linewidth = 1.2) +
+  labs(
+    title = "Permutation Test: Mean Departure Delay — June vs December",
+    subtitle = "Red line shows the observed difference (June − December)",
+    x = "Difference in Mean Departure Delay (minutes)",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 13)
+
+# Calculate the two-tailed p-value
+p_value <- 2 * min(
+  (sum(result >= observed) + 1) / (N + 1),
+  (sum(result <= observed) + 1) / (N + 1)
+)
+
+p_value  # print the final p-value
+
+```
+p value is small indicating that the mean departure delays between June and December months are statistically significant.
+
+
+
+
+
+```{r}
+# =====================================================
+# PERMUTATION TEST: June vs July (Proportion of Late Flights)
+# =====================================================
+
+# Filter June and July data
+flights_test <- flights_weather_joined %>%
+  filter(month %in% c(6, 7)) %>%
+  drop_na(late)
+
+# Observed difference: proportion of late flights (June - July)
+observed <- mean(flights_test$late[flights_test$month == 6]) -
+             mean(flights_test$late[flights_test$month == 7])
+observed
+
+# Permutation setup
+N <- 10^3 - 1
+sample.size <- nrow(flights_test)
+group.1.size <- sum(flights_test$month == 6)
+result <- numeric(N)
+
+set.seed(123)
+
+for (i in 1:N) {
+  index <- sample(sample.size, size = group.1.size, replace = FALSE)
+  result[i] <- mean(flights_test$late[index]) - mean(flights_test$late[-index])
+}
+
+# Plot
+ggplot(tibble(result), aes(x = result)) +
+  geom_histogram(bins = 40, fill = "skyblue", color = "white") +
+  geom_vline(xintercept = observed, color = "red", linewidth = 1.2) +
+  labs(
+    title = "Permutation Test: Proportion of Late Flights (June vs July)",
+    subtitle = "Red line = observed difference (June − July)",
+    x = "Difference in Proportion Late",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 13)
+
+# p-value
+p_value <- 2 * min(
+  (sum(result >= observed) + 1) / (N + 1),
+  (sum(result <= observed) + 1) / (N + 1)
+)
+p_value
+
+```
+
+
+Permutation test for Very Late flights
+
+```{r}
+# =====================================================
+# PERMUTATION TEST: June vs July (Proportion of Very Late Flights)
+# =====================================================
+
+flights_test <- flights_weather_joined %>%
+  filter(month %in% c(6, 7)) %>%
+  drop_na(very_late)
+
+observed <- mean(flights_test$very_late[flights_test$month == 6]) -
+             mean(flights_test$very_late[flights_test$month == 7])
+observed
+
+N <- 10^3 - 1
+sample.size <- nrow(flights_test)
+group.1.size <- sum(flights_test$month == 6)
+result <- numeric(N)
+
+set.seed(123)
+for (i in 1:N) {
+  index <- sample(sample.size, size = group.1.size, replace = FALSE)
+  result[i] <- mean(flights_test$very_late[index]) - mean(flights_test$very_late[-index])
+}
+
+ggplot(tibble(result), aes(x = result)) +
+  geom_histogram(bins = 40, fill = "skyblue", color = "white") +
+  geom_vline(xintercept = observed, color = "red", linewidth = 1.2) +
+  labs(
+    title = "Permutation Test: Proportion of Very Late Flights (June vs July)",
+    subtitle = "Red line = observed difference (June − July)",
+    x = "Difference in Proportion Very Late",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 13)
+
+p_value <- 2 * min(
+  (sum(result >= observed) + 1) / (N + 1),
+  (sum(result <= observed) + 1) / (N + 1)
+)
+p_value
+```
+
+the proporation of late and very late flights between the months June and july has low p-value indicating that the departure delay is due to random chance only.
+
+
+```{r}
+# Define seasons by month grouping
+flights_season <- flights_weather_joined %>%
+  mutate(
+    season = case_when(
+      month %in% c(12, 1, 2) ~ "Winter",
+      month %in% c(3, 4, 5)  ~ "Spring",
+      month %in% c(6, 7, 8)  ~ "Summer",
+      month %in% c(9, 10, 11) ~ "Fall"
+    )
+  ) %>%
+  drop_na(dep_delay)
+
+# Store unique seasons
+seasons <- unique(flights_season$season)
+
+# Create empty list to store results
+perm_results <- list()
+p_values <- numeric(length(seasons))
+
+set.seed(123)
+
+# Loop through each pair of seasons for permutation testing
+for (s in 1:(length(seasons) - 1)) {
+  for (t in (s + 1):length(seasons)) {
+    
+    season1 <- seasons[s]
+    season2 <- seasons[t]
+    
+    # Filter data for the two selected seasons
+    subset_data <- flights_season %>%
+      filter(season %in% c(season1, season2))
+    
+    # Observed difference in mean delay
+    observed <- mean(subset_data$dep_delay[subset_data$season == season1]) -
+                mean(subset_data$dep_delay[subset_data$season == season2])
+    
+    # Permutation setup
+    N <- 999
+    sample.size <- nrow(subset_data)
+    group.size <- sum(subset_data$season == season1)
+    result <- numeric(N)
+    
+    # Run permutation
+    for (i in 1:N) {
+      index <- sample(sample.size, size = group.size, replace = FALSE)
+      result[i] <- mean(subset_data$dep_delay[index]) -
+                   mean(subset_data$dep_delay[-index])
+    }
+    
+    # Compute two-tailed p-value
+    p_value <- 2 * min(
+      (sum(result >= observed) + 1) / (N + 1),
+      (sum(result <= observed) + 1) / (N + 1)
+    )
+    
+    # Store results
+    perm_results[[paste(season1, "vs", season2)]] <- list(
+      observed = observed,
+      p_value = p_value,
+      result = result
+    )
+    
+    # Plot distribution
+    print(
+      ggplot(data = tibble(result), aes(x = result)) +
+        geom_histogram(bins = 40, fill = "lightgreen", color = "white") +
+        geom_vline(xintercept = observed, color = "red", linewidth = 1.2) +
+        labs(
+          title = paste("Permutation Test:", season1, "vs", season2),
+          subtitle = paste("Observed difference =", round(observed, 2),
+                           "| p-value =", round(p_value, 4)),
+          x = "Difference in Mean Departure Delay (minutes)",
+          y = "Count"
+        ) +
+        theme_minimal(base_size = 13)
+    )
+  }
+}
+
+# View all results
+perm_results
+
+```
+
